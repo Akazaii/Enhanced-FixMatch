@@ -1,0 +1,9 @@
+batch_size = 64
+num_workers = 4
+num_epochs = 100
+lr = 0.03
+weight_decay = 5e-4
+alpha = 1.0  # Weight for the balanced loss
+lambda_u = 1.0  # Weight for the unsupervised loss
+threshold = 0.95  # Confidence threshold for pseudo-labeling
+mu = 7  # Ratio of unlabeled to labeled data per batch
