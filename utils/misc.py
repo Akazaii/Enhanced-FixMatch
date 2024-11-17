@@ -5,6 +5,10 @@ import logging
 
 import torch
 
+import os
+import numpy as np
+import random
+
 logger = logging.getLogger(__name__)
 
 __all__ = ['get_mean_and_std', 'accuracy', 'AverageMeter']
@@ -62,3 +66,25 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+        
+def set_seed(args):
+
+    os.environ['PYTHONHASHSEED'] = str(args.seed)
+
+    random.seed(args.seed)
+
+    np.random.seed(args.seed)
+
+    torch.manual_seed(args.seed)
+
+    if args.n_gpu > 0:
+
+        torch.cuda.manual_seed_all(args.seed)
+
+    else:
+
+        torch.manual_seed(args.seed)
+
+    torch.backends.cudnn.deterministic = True
+
+    torch.backends.cudnn.benchmark = False
