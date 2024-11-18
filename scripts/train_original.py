@@ -327,7 +327,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                          disable=args.local_rank not in [-1, 0])
         for batch_idx in range(args.eval_step):
             try:
-                inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = labeled_iter.__next__()
                 # error occurs ↓
                 # inputs_x, targets_x = next(labeled_iter)
             except:
@@ -335,7 +335,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                     labeled_epoch += 1
                     labeled_trainloader.sampler.set_epoch(labeled_epoch)
                 labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = labeled_iter.__next__()
                 # error occurs ↓
                 # inputs_x, targets_x = next(labeled_iter)
 
