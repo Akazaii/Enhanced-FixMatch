@@ -340,7 +340,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 # inputs_x, targets_x = next(labeled_iter)
 
             try:
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.__next__()
                 # error occurs ↓
                 # (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
             except:
@@ -348,7 +348,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                     unlabeled_epoch += 1
                     unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
                 unlabeled_iter = iter(unlabeled_trainloader)
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.__next__()
                 # error occurs ↓
                 # (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
 
