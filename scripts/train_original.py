@@ -17,8 +17,8 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from ..dataset.cifar import DATASET_GETTERS
-from ..utils import AverageMeter, accuracy
+from dataset.cifar import DATASET_GETTERS
+from utils import AverageMeter, accuracy
 
 logger = logging.getLogger(__name__)
 best_acc = 0
