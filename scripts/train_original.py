@@ -127,6 +127,8 @@ def main(args=None):
                         help="For distributed training: local_rank")
     parser.add_argument('--no-progress', action='store_true',
                         help="don't use progress bar")
+    parser.add_argument('--epochs', type=int, default=1, help='Number of epochs')  # Add this line
+    parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
 
     if args is None:
         args = parser.parse_args()
