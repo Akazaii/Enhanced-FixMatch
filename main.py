@@ -18,7 +18,7 @@ def set_seed(seed):
 def main():
     parser = argparse.ArgumentParser(description='Run experiments')
     parser.add_argument('--experiment', type=str, required=True,
-                        choices=['fixmatch', 'abc'],
+                        choices=['original_fixmatch', 'enhanced_fixmatch'],
                         help='Experiment to run')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     args = parser.parse_args()
@@ -26,12 +26,12 @@ def main():
     # Set the random seed
     set_seed(args.seed)
 
-    if args.experiment == 'fixmatch':
-        from experiments.train_fixmatch import main as fixmatch_main
-        fixmatch_main()
-    elif args.experiment == 'abc':
-        from experiments.train_abc import main as abc_main
-        abc_main()
+    if args.experiment == 'original_fixmatch':
+        from scripts.train_original import main as original_fixmatch_main
+        original_fixmatch_main()
+    elif args.experiment == 'enhanced_fixmatch':
+        from scripts.train_original import main as enhanced_fixmatch_main
+        enhanced_fixmatch_main()
 
 if __name__ == '__main__':
     main()

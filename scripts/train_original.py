@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset.cifar import DATASET_GETTERS
-from utils import AverageMeter, accuracy
+from utils import AverageMeter, accuracy 
 
 logger = logging.getLogger(__name__)
 best_acc = 0
@@ -65,8 +65,11 @@ def de_interleave(x, size):
     return x.reshape([size, -1] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
 
 
+from models.moco import MoCo
+
 def main():
     parser = argparse.ArgumentParser(description='PyTorch FixMatch Training')
+    parser.add_argument('--experiment', default='fixmatch', type=str, choices=['fixmatch', 'enhanced_fixmatch'], help='Experiment type')
     parser.add_argument('--gpu-id', default='0', type=int,
                         help='id(s) for CUDA_VISIBLE_DEVICES')
     parser.add_argument('--num-workers', type=int, default=4,
@@ -234,6 +237,9 @@ def main():
         torch.distributed.barrier()
 
     model = create_model(args)
+    if args.experiment == 'enhanced_fixmatch':
+        moco = MoCo(base_encoder=create_model(args)).to(args.device)
+        moco_optimizer = optim.SGD(moco.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wdecay)
 
     if args.local_rank == 0:
         torch.distributed.barrier()
@@ -294,11 +300,11 @@ def main():
 
     model.zero_grad()
     train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler)
+          model, optimizer, ema_model, scheduler, moco if args.experiment == 'enhanced_fixmatch' else None, moco_optimizer if args.experiment == 'enhanced_fixmatch' else None)
 
 
 def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler):
+          model, optimizer, ema_model, scheduler, moco=None, moco_optimizer=None):
     if args.amp:
         from apex import amp
     global best_acc
@@ -374,6 +380,12 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
             loss = Lx + args.lambda_u * Lu
 
+            if moco is not None:
+                im_q, im_k = inputs_x, inputs_u_w
+                logits_moco, labels_moco = moco(im_q, im_k)
+                loss_moco = F.cross_entropy(logits_moco, labels_moco)
+                loss += loss_moco
+
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
@@ -385,6 +397,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             losses_u.update(Lu.item())
             optimizer.step()
             scheduler.step()
+            if moco_optimizer is not None:
+                moco_optimizer.zero_grad()
+                loss_moco.backward()
+                moco_optimizer.step()
             if args.use_ema:
                 ema_model.update(model)
             model.zero_grad()
