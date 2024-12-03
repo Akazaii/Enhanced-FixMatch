@@ -6,7 +6,6 @@ import random
 import shutil
 import time
 from collections import OrderedDict
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -243,24 +242,37 @@ def main(args=None):
         torch.distributed.barrier()
 
     model = create_model(args)
+
     if args.experiment == 'enhanced_fixmatch':
-        moco = MoCo(base_encoder=create_model(args)).to(args.device)
-        moco_optimizer = optim.SGD(moco.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wdecay)
-
-    if args.local_rank == 0:
-        torch.distributed.barrier()
-
-    model.to(args.device)
+        # Initialize MoCo
+        from models.wideresnet import WideResNet
+        from models.moco import MoCo  # Add this import
+        moco = MoCo(
+            base_encoder=WideResNet,
+            dim=128,
+            K=65536,
+            m=0.999,
+            T=0.07,
+            mask_threshold=0.95,
+            encoder_args={
+                'depth': args.model_depth,
+                'widen_factor': args.model_width,
+                'drop_rate': 0
+            }
+        ).to(args.device)
+        # Include MoCo's encoder_q parameters in the model's parameters
+        model_params = list(model.named_parameters()) + [('moco_' + n, p) for n, p in moco.encoder_q.named_parameters()]
+    else:
+        moco = None
+        model_params = list(model.named_parameters())
 
     no_decay = ['bias', 'bn']
     grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(
-            nd in n for nd in no_decay)], 'weight_decay': args.wdecay},
-        {'params': [p for n, p in model.named_parameters() if any(
-            nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {'params': [p for n, p in model_params if not any(nd in n for nd in no_decay)], 'weight_decay': args.wdecay},
+        {'params': [p for n, p in model_params if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = optim.SGD(grouped_parameters, lr=args.lr,
-                          momentum=0.9, nesterov=args.nesterov)
+                        momentum=0.9, nesterov=args.nesterov)
 
     if args.epochs is None:
         args.epochs = math.ceil(args.total_steps / args.eval_step)  # Calculate epochs if not provided
@@ -306,13 +318,18 @@ def main(args=None):
         f"  Total train batch size = {args.batch_size*args.world_size}")
     logger.info(f"  Total optimization steps = {args.total_steps}")
 
-    model.zero_grad()
-    train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler, moco if args.experiment == 'enhanced_fixmatch' else None, moco_optimizer if args.experiment == 'enhanced_fixmatch' else None)
+    # Start training
+    if args.experiment == 'enhanced_fixmatch':
+        train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
+                   model, moco, optimizer, ema_model, scheduler)
+    else:
+        model.zero_grad()
+        train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
+              model, optimizer, ema_model, scheduler)
 
 
 def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler, moco=None, moco_optimizer=None):
+          model, optimizer, ema_model, scheduler):
     if args.amp:
         from apex import amp
     global best_acc
@@ -378,7 +395,6 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             del logits
 
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
-
             pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(args.threshold).float()
@@ -387,12 +403,6 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                                   reduction='none') * mask).mean()
 
             loss = Lx + args.lambda_u * Lu
-
-            if moco is not None:
-                im_q, im_k = inputs_x, inputs_u_w
-                logits_moco, labels_moco = moco(im_q, im_k)
-                loss_moco = F.cross_entropy(logits_moco, labels_moco)
-                loss += loss_moco
 
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -405,10 +415,6 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             losses_u.update(Lu.item())
             optimizer.step()
             scheduler.step()
-            if moco_optimizer is not None:
-                moco_optimizer.zero_grad()
-                loss_moco.backward()
-                moco_optimizer.step()
             if args.use_ema:
                 ema_model.update(model)
             model.zero_grad()
@@ -474,6 +480,180 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
     if args.local_rank in [-1, 0]:
         args.writer.close()
 
+def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
+               model, moco, optimizer, ema_model, scheduler):
+    if args.amp:
+        from apex import amp
+    global best_acc
+    test_accs = []
+    end = time.time()
+
+    if args.world_size > 1:
+        labeled_epoch = 0
+        unlabeled_epoch = 0
+        labeled_trainloader.sampler.set_epoch(labeled_epoch)
+        unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+
+    labeled_iter = iter(labeled_trainloader)
+    unlabeled_iter = iter(unlabeled_trainloader)
+
+    model.train()
+    moco.train()  # Set MoCo to training mode
+    for epoch in range(args.start_epoch, args.epochs):
+        batch_time = AverageMeter()
+        data_time = AverageMeter()
+        losses = AverageMeter()
+        losses_x = AverageMeter()
+        losses_u = AverageMeter()
+        losses_moco = AverageMeter()
+        mask_probs = AverageMeter()
+        if not args.no_progress:
+            p_bar = tqdm(range(args.eval_step),
+                         disable=args.local_rank not in [-1, 0])
+        for batch_idx in range(args.eval_step):
+            try:
+                inputs_x, targets_x = next(labeled_iter)
+            except StopIteration:
+                if args.world_size > 1:
+                    labeled_epoch += 1
+                    labeled_trainloader.sampler.set_epoch(labeled_epoch)
+                labeled_iter = iter(labeled_trainloader)
+                inputs_x, targets_x = next(labeled_iter)
+
+            try:
+                (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
+            except StopIteration:
+                if args.world_size > 1:
+                    unlabeled_epoch += 1
+                    unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+                unlabeled_iter = iter(unlabeled_trainloader)
+                (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
+
+            data_time.update(time.time() - end)
+            batch_size = inputs_x.shape[0]
+            # Move data to device
+            inputs_x = inputs_x.to(args.device)
+            targets_x = targets_x.to(args.device)
+            inputs_u_w = inputs_u_w.to(args.device)
+            inputs_u_s = inputs_u_s.to(args.device)
+
+            # Prepare inputs and model outputs
+            inputs = interleave(torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1)
+            logits = model(inputs)
+            logits = de_interleave(logits, 2*args.mu+1)
+            logits_x = logits[:batch_size]
+            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+            del logits
+
+            # Zero gradients before backward pass
+            optimizer.zero_grad()
+
+            # Compute supervised loss Lx
+            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+
+            # Compute unsupervised loss Lu
+            pseudo_label = torch.softmax(logits_u_w.detach() / args.T, dim=-1)
+            max_probs, targets_u = torch.max(pseudo_label, dim=-1)
+            mask = max_probs.ge(args.threshold).float()
+            Lu = (F.cross_entropy(logits_u_s, targets_u, reduction='none') * mask).mean()
+
+            # Compute MoCo loss
+            im_q, im_k = inputs_x, inputs_u_w
+            logits_moco, labels_moco = moco(im_q, im_k)
+
+            if logits_moco is not None and labels_moco is not None and logits_moco.numel() > 0:
+                loss_moco = F.cross_entropy(logits_moco, labels_moco)
+                losses_moco.update(loss_moco.item())
+            else:
+                # No valid logits, set loss_moco to zero
+                loss_moco = torch.tensor(0.0).to(args.device)
+
+            # Total loss
+            loss = Lx + args.lambda_u * Lu + loss_moco
+
+            # Backward pass and optimization
+            if args.amp:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                loss.backward()
+
+            optimizer.step()
+            scheduler.step()
+            if args.use_ema:
+                ema_model.update(model)
+
+            # No need to zero gradients here
+
+            # Update metrics
+            losses.update(loss.item())
+            losses_x.update(Lx.item())
+            losses_u.update(Lu.item())
+            losses_moco.update(loss_moco.item())
+            mask_probs.update(mask.mean().item())
+
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if not args.no_progress:
+                p_bar.set_description("Train Epoch: {epoch}/{epochs:4}. Iter: {batch:4}/{iter:4}. LR: {lr:.4f}. Data: {data:.3f}s. Batch: {bt:.3f}s. Loss: {loss:.4f}. Loss_x: {loss_x:.4f}. Loss_u: {loss_u:.4f}. Loss_moco: {loss_moco:.4f}. Mask: {mask:.2f}. ".format(
+                    epoch=epoch + 1,
+                    epochs=args.epochs,
+                    batch=batch_idx + 1,
+                    iter=args.eval_step,
+                    lr=scheduler.get_last_lr()[0],
+                    data=data_time.avg,
+                    bt=batch_time.avg,
+                    loss=losses.avg,
+                    loss_x=losses_x.avg,
+                    loss_u=losses_u.avg,
+                    loss_moco=losses_moco.avg,
+                    mask=mask_probs.avg))
+                p_bar.update()
+
+        if not args.no_progress:
+            p_bar.close()
+
+        if args.use_ema:
+            test_model = ema_model.ema
+        else:
+            test_model = model
+
+        if args.local_rank in [-1, 0]:
+            test_loss, test_acc = test(args, test_loader, test_model, epoch)
+
+            args.writer.add_scalar('train/1.train_loss', losses.avg, epoch)
+            args.writer.add_scalar('train/2.train_loss_x', losses_x.avg, epoch)
+            args.writer.add_scalar('train/3.train_loss_u', losses_u.avg, epoch)
+            args.writer.add_scalar('train/4.train_loss_moco', losses_moco.avg, epoch)
+            args.writer.add_scalar('train/5.mask', mask_probs.avg, epoch)
+            args.writer.add_scalar('test/1.test_acc', test_acc, epoch)
+            args.writer.add_scalar('test/2.test_loss', test_loss, epoch)
+
+            is_best = test_acc > best_acc
+            best_acc = max(test_acc, best_acc)
+
+            model_to_save = model.module if hasattr(model, "module") else model
+            if args.use_ema:
+                ema_to_save = ema_model.ema.module if hasattr(
+                    ema_model.ema, "module") else ema_model.ema
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model_to_save.state_dict(),
+                'ema_state_dict': ema_to_save.state_dict() if args.use_ema else None,
+                'acc': test_acc,
+                'best_acc': best_acc,
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+            }, is_best, args.out)
+
+            test_accs.append(test_acc)
+            logger.info('Best top-1 acc: {:.2f}'.format(best_acc))
+            logger.info('Mean top-1 acc: {:.2f}\n'.format(
+                np.mean(test_accs[-20:])))
+
+    if args.local_rank in [-1, 0]:
+        args.writer.close()
 
 def test(args, test_loader, model, epoch):
     batch_time = AverageMeter()

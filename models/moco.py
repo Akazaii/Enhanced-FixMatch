@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
-    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.95):
+    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.95, encoder_args=None):
         super(MoCo, self).__init__()
 
         self.K = K
@@ -12,9 +12,10 @@ class MoCo(nn.Module):
         self.T = T
         self.mask_threshold = mask_threshold
 
-        # create the encoders
-        self.encoder_q = base_encoder(num_classes=dim, depth=28, widen_factor=2, drop_rate=0)
-        self.encoder_k = base_encoder(num_classes=dim, depth=28, widen_factor=2, drop_rate=0)
+        if encoder_args is None:
+            encoder_args = {}
+        self.encoder_q = base_encoder(num_classes=dim, **encoder_args)
+        self.encoder_k = base_encoder(num_classes=dim, **encoder_args)
 
         # create the queue
         self.register_buffer("queue", torch.randn(dim, K))
@@ -33,11 +34,15 @@ class MoCo(nn.Module):
         batch_size = keys.shape[0]
 
         ptr = int(self.queue_ptr)
-        assert self.K % batch_size == 0  # for simplicity
+        # Replace the assertion with modulo operation
+        if ptr + batch_size > self.K:
+            overflow = ptr + batch_size - self.K
+            self.queue[:, ptr:] = keys[:batch_size - overflow].T
+            self.queue[:, :overflow] = keys[batch_size - overflow:].T
+        else:
+            self.queue[:, ptr:ptr + batch_size] = keys.T
 
-        self.queue[:, ptr:ptr + batch_size] = keys.T
         ptr = (ptr + batch_size) % self.K  # move pointer
-
         self.queue_ptr[0] = ptr
 
     def forward(self, im_q, im_k):
@@ -64,6 +69,10 @@ class MoCo(nn.Module):
         logits = logits[mask]
         labels = labels[mask]
 
+        if logits.numel() == 0:
+            # If logits are empty, return None to indicate no loss should be computed
+            return None, None
+
         return logits, labels
 
     def compute_loss(self, logits, labels):
@@ -74,7 +83,10 @@ class MoCo(nn.Module):
 # utils
 @torch.no_grad()
 def concat_all_gather(tensor):
-    tensors_gather = [torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
-    output = torch.cat(tensors_gather, dim=0)
-    return output
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        tensors_gather = [torch.zeros_like(tensor) for _ in range(torch.distributed.get_world_size())]
+        torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
+        output = torch.cat(tensors_gather, dim=0)
+        return output
+    else:
+        return tensor
