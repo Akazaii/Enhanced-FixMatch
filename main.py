@@ -18,7 +18,7 @@ def set_seed(seed):
 def main():
     parser = argparse.ArgumentParser(description='Run experiments')
     parser.add_argument('--experiment', type=str, required=True,
-                        choices=['original_fixmatch', 'enhanced_fixmatch'],
+                        choices=['fixmatch', 'enhanced_fixmatch'],
                         help='Experiment to run')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--dataset', type=str, required=True, help='Dataset to use')
