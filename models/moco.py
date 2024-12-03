@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
-    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.5, encoder_args=None):
+    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.1, encoder_args=None):
         super(MoCo, self).__init__()
 
         self.K = K
@@ -66,6 +66,7 @@ class MoCo(nn.Module):
 
         # Apply masking
         mask = torch.max(torch.softmax(logits, dim=1), dim=1)[0] >= self.mask_threshold
+        print(f"Number of masked samples: {mask.sum().item()} / {logits.shape[0]}")
         logits = logits[mask]
         labels = labels[mask]
 
