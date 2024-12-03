@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
     def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.95):
@@ -8,11 +10,11 @@ class MoCo(nn.Module):
         self.K = K
         self.m = m
         self.T = T
-        self.mask_threshold = mask_threshold  # Add this line
+        self.mask_threshold = mask_threshold
 
         # create the encoders
-        self.encoder_q = base_encoder(depth=28, widen_factor=2, dropout=0)
-        self.encoder_k = base_encoder(depth=28, widen_factor=2, dropout=0)
+        self.encoder_q = base_encoder(num_classes=dim, depth=28, widen_factor=2, drop_rate=0)
+        self.encoder_k = base_encoder(num_classes=dim, depth=28, widen_factor=2, drop_rate=0)
 
         # create the queue
         self.register_buffer("queue", torch.randn(dim, K))
@@ -27,13 +29,14 @@ class MoCo(nn.Module):
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys):
+        keys = concat_all_gather(keys)
         batch_size = keys.shape[0]
 
         ptr = int(self.queue_ptr)
-        assert self.K % batch_size == 0
+        assert self.K % batch_size == 0  # for simplicity
 
         self.queue[:, ptr:ptr + batch_size] = keys.T
-        ptr = (ptr + batch_size) % self.K
+        ptr = (ptr + batch_size) % self.K  # move pointer
 
         self.queue_ptr[0] = ptr
 
@@ -62,3 +65,16 @@ class MoCo(nn.Module):
         labels = labels[mask]
 
         return logits, labels
+
+    def compute_loss(self, logits, labels):
+        # Compute the cross-entropy loss
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+# utils
+@torch.no_grad()
+def concat_all_gather(tensor):
+    tensors_gather = [torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())]
+    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
+    output = torch.cat(tensors_gather, dim=0)
+    return output
