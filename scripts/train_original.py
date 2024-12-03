@@ -127,7 +127,7 @@ def main(args=None):
                         help="For distributed training: local_rank")
     parser.add_argument('--no-progress', action='store_true',
                         help="don't use progress bar")
-    parser.add_argument('--epochs', type=int, default=1, help='Number of epochs')  # Add this line
+    parser.add_argument('--epochs', type=int, default=None, help='Number of epochs')  # Modify this line
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
 
     if args is None:
@@ -262,7 +262,9 @@ def main(args=None):
     optimizer = optim.SGD(grouped_parameters, lr=args.lr,
                           momentum=0.9, nesterov=args.nesterov)
 
-    args.epochs = math.ceil(args.total_steps / args.eval_step)
+    if args.epochs is None:
+        args.epochs = math.ceil(args.total_steps / args.eval_step)  # Calculate epochs if not provided
+
     scheduler = get_cosine_schedule_with_warmup(
         optimizer, args.warmup, args.total_steps)
 
