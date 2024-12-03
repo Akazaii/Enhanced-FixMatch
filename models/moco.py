@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
-    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.1, encoder_args=None):
+    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.01, encoder_args=None):
         super(MoCo, self).__init__()
 
         self.K = K
@@ -54,6 +54,19 @@ class MoCo(nn.Module):
             k = self.encoder_k.features(im_k)
             k = nn.functional.normalize(k, dim=1)
 
+        # Compute cosine similarity between q and k
+        cos_sim = torch.einsum('nc,nc->n', [q, k])  # Shape: [N]
+        print(f"Cosine similarities: {cos_sim}")
+        # Apply masking based on cosine similarity
+        mask = cos_sim >= self.mask_threshold
+
+        # Select samples where mask is True
+        q = q[mask]
+        k = k[mask]
+        if q.numel() == 0:
+            return None, None
+
+        # Recompute l_pos and l_neg with masked q and k
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
         l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
 
@@ -63,16 +76,6 @@ class MoCo(nn.Module):
         labels = torch.zeros(logits.shape[0], dtype=torch.long).to(logits.device)
 
         self._dequeue_and_enqueue(k)
-
-        # Apply masking
-        mask = torch.max(torch.softmax(logits, dim=1), dim=1)[0] >= self.mask_threshold
-        print(f"Number of masked samples: {mask.sum().item()} / {logits.shape[0]}")
-        logits = logits[mask]
-        labels = labels[mask]
-
-        if logits.numel() == 0:
-            # If logits are empty, return None to indicate no loss should be computed
-            return None, None
 
         return logits, labels
 
