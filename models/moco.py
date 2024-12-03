@@ -8,11 +8,11 @@ class MoCo(nn.Module):
         self.K = K
         self.m = m
         self.T = T
-        self.mask_threshold = mask_threshold
+        self.mask_threshold = mask_threshold  # Add this line
 
         # create the encoders
-        self.encoder_q = base_encoder(num_classes=dim)
-        self.encoder_k = base_encoder(num_classes=dim)
+        self.encoder_q = base_encoder(depth=28, widen_factor=2, dropout=0)
+        self.encoder_k = base_encoder(depth=28, widen_factor=2, dropout=0)
 
         # create the queue
         self.register_buffer("queue", torch.randn(dim, K))
@@ -38,12 +38,12 @@ class MoCo(nn.Module):
         self.queue_ptr[0] = ptr
 
     def forward(self, im_q, im_k):
-        q = self.encoder_q(im_q)
+        q = self.encoder_q.features(im_q)
         q = nn.functional.normalize(q, dim=1)
 
         with torch.no_grad():
             self._momentum_update_key_encoder()
-            k = self.encoder_k(im_k)
+            k = self.encoder_k.features(im_k)
             k = nn.functional.normalize(k, dim=1)
 
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
