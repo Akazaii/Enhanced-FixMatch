@@ -67,7 +67,7 @@ def de_interleave(x, size):
 
 from models.moco import MoCo
 
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser(description='PyTorch FixMatch Training')
     parser.add_argument('--experiment', default='fixmatch', type=str, choices=['fixmatch', 'enhanced_fixmatch'], help='Experiment type')
     parser.add_argument('--gpu-id', default='0', type=int,
@@ -128,7 +128,11 @@ def main():
     parser.add_argument('--no-progress', action='store_true',
                         help="don't use progress bar")
 
-    args = parser.parse_args()
+    if args is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(args)
+
     global best_acc
 
     def create_model(args):
