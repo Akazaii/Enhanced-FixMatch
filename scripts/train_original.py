@@ -151,7 +151,7 @@ def main(args=None):
                                          num_classes=args.num_classes)
         logger.info("Total params: {:.2f}M".format(
             sum(p.numel() for p in model.parameters())/1e6))
-        return model
+        return model.to(args.device)  # Ensure the model is moved to the correct device
 
     if args.local_rank == -1:
         device = torch.device('cuda', args.gpu_id)
@@ -259,7 +259,7 @@ def main(args=None):
                 'widen_factor': args.model_width,
                 'drop_rate': 0
             }
-        ).to(args.device)
+        ).to(args.device)  # Ensure MoCo is moved to the correct device
         # Include MoCo's encoder_q parameters in the model's parameters
         model_params = list(model.named_parameters()) + [('moco_' + n, p) for n, p in moco.encoder_q.named_parameters()]
     else:
@@ -309,6 +309,10 @@ def main(args=None):
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank],
             output_device=args.local_rank, find_unused_parameters=True)
+        if moco is not None:
+            moco = torch.nn.parallel.DistributedDataParallel(
+                moco, device_ids=[args.local_rank],
+                output_device=args.local_rank, find_unused_parameters=True)
 
     logger.info("***** Running training *****")
     logger.info(f"  Task = {args.dataset}@{args.num_labeled}")
