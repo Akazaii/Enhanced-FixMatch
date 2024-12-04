@@ -14,8 +14,13 @@ class MoCo(nn.Module):
 
         if encoder_args is None:
             encoder_args = {}
-        self.encoder_q = base_encoder(num_classes=dim, **encoder_args)
-        self.encoder_k = base_encoder(num_classes=dim, **encoder_args)
+        self.encoder_q = base_encoder(**encoder_args)
+        self.encoder_k = base_encoder(**encoder_args)
+
+        # Create projection heads
+        feature_dim = self.encoder_q.output_dim  # Adjust based on your model
+        self.fc_q = nn.Linear(feature_dim, dim)
+        self.fc_k = nn.Linear(feature_dim, dim)
 
         # create the queue
         self.register_buffer("queue", torch.randn(dim, K))
@@ -46,12 +51,14 @@ class MoCo(nn.Module):
         self.queue_ptr[0] = ptr
 
     def forward(self, im_q, im_k):
-        q = self.encoder_q.features(im_q)
+        q = self.encoder_q(im_q)
+        q = self.fc_q(q)
         q = nn.functional.normalize(q, dim=1)
 
         with torch.no_grad():
             self._momentum_update_key_encoder()
-            k = self.encoder_k.features(im_k)
+            k = self.encoder_k(im_k)
+            k = self.fc_k(k)
             k = nn.functional.normalize(k, dim=1)
 
         # Compute cosine similarity between q and k

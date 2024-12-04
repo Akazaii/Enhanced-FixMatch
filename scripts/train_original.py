@@ -253,7 +253,7 @@ def main(args=None):
             K=65536,
             m=0.999,
             T=0.07,
-            mask_threshold=0.95,
+            mask_threshold=0.7,
             encoder_args={
                 'depth': args.model_depth,
                 'widen_factor': args.model_width,
