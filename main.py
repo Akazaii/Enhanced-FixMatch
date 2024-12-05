@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--threshold', type=float, required=True, help='Pseudo label threshold')
     parser.add_argument('--device', type=str, required=True, help='Device to use')
     parser.add_argument('--out', type=str, required=True, help='Output directory')
+    parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')
     args = parser.parse_args()
 
     # Set the random seed
@@ -47,7 +48,9 @@ def main():
         '--lr', str(args.lr),
         '--threshold', str(args.threshold),
         '--device', args.device,
-        '--out', args.out
+        '--out', args.out,
+        '--moco_mask_threshold', args.moco_mask_threshold
+        
     ]
 
     from scripts.train_original import main as train_main
