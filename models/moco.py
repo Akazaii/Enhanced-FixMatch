@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
-    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.7, encoder_args=None):
+    def __init__(self, base_encoder, num_classes, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.7, encoder_args=None):
         super(MoCo, self).__init__()
 
         self.K = K
@@ -14,11 +14,16 @@ class MoCo(nn.Module):
 
         if encoder_args is None:
             encoder_args = {}
-        self.encoder_q = base_encoder(**encoder_args)
-        self.encoder_k = base_encoder(**encoder_args)
+        self.encoder_q = base_encoder(num_classes=num_classes, **encoder_args)
+        self.encoder_k = base_encoder(num_classes=num_classes, **encoder_args)
+
+        # Freeze the key encoder's parameters initially
+        for param in self.encoder_k.parameters():
+            param.requires_grad = False
+
+        feature_dim = self.encoder_q.num_features
 
         # Create projection heads
-        feature_dim = self.encoder_q.output_dim  # Adjust based on your model
         self.fc_q = nn.Linear(feature_dim, dim)
         self.fc_k = nn.Linear(feature_dim, dim)
 
@@ -51,14 +56,14 @@ class MoCo(nn.Module):
         self.queue_ptr[0] = ptr
 
     def forward(self, im_q, im_k):
-        q = self.encoder_q(im_q)
-        q = self.fc_q(q)
+        q_features = self.encoder_q.features(im_q)
+        q = self.fc_q(q_features)
         q = nn.functional.normalize(q, dim=1)
 
         with torch.no_grad():
             self._momentum_update_key_encoder()
-            k = self.encoder_k(im_k)
-            k = self.fc_k(k)
+            k_features = self.encoder_k.features(im_k)
+            k = self.fc_k(k_features) 
             k = nn.functional.normalize(k, dim=1)
 
         # Compute cosine similarity between q and k

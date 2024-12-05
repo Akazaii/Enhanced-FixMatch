@@ -128,6 +128,7 @@ def main(args=None):
                         help="don't use progress bar")
     parser.add_argument('--epochs', type=int, default=None, help='Number of epochs')  # Modify this line
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
+    parser.add_argument('--moco_mask_threshold', type=float, default=0.8, help='Moco Mask')  # Add this line
 
     if args is None:
         args = parser.parse_args()
@@ -249,11 +250,12 @@ def main(args=None):
         from models.moco import MoCo  # Add this import
         moco = MoCo(
             base_encoder=WideResNet,
+            num_classes=args.num_classes,
             dim=128,
             K=65536,
             m=0.999,
             T=0.07,
-            mask_threshold=0.7,
+            mask_threshold= args.moco_mask_threshold,
             encoder_args={
                 'depth': args.model_depth,
                 'widen_factor': args.model_width,
