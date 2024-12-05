@@ -263,7 +263,11 @@ def main(args=None):
             }
         ).to(args.device)  # Ensure MoCo is moved to the correct device
         # Include MoCo's encoder_q parameters in the model's parameters
-        model_params = list(model.named_parameters()) + [('moco_' + n, p) for n, p in moco.encoder_q.named_parameters()]
+        model_params = (
+        list(model.named_parameters()) +
+        [('moco_' + n, p) for n, p in moco.encoder_q.named_parameters()] +
+        [('moco_fc_q_' + n, p) for n, p in moco.fc_q.named_parameters()]
+    )
     else:
         moco = None
         model_params = list(model.named_parameters())
@@ -575,7 +579,8 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 loss_moco = torch.tensor(0.0).to(args.device)
 
             # Total loss
-            loss = Lx + args.lambda_u * Lu + loss_moco
+            alpha = 0.5
+            loss = Lx + args.lambda_u * Lu + alpha * loss_moco
 
             # Backward pass and optimization
             if args.amp:
