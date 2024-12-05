@@ -128,7 +128,7 @@ def main(args=None):
                         help="don't use progress bar")
     parser.add_argument('--epochs', type=int, default=None, help='Number of epochs')  # Modify this line
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
-    parser.add_argument('--moco_mask_threshold', type=float, default=0.8, help='Moco Mask')  # Add this line
+    parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')  # Add this line
 
     if args is None:
         args = parser.parse_args()
