@@ -19,6 +19,18 @@ from tqdm import tqdm
 from dataset.cifar import DATASET_GETTERS
 from utils import AverageMeter, accuracy 
 
+from torchvision import transforms
+from PIL import Image
+
+cifar10_mean = (0.4914, 0.4822, 0.4465)
+cifar10_std = (0.2471, 0.2435, 0.2616)
+
+# Define the weak augmentation
+weak_augmentation = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(size=32, padding=int(32*0.125), padding_mode='reflect')
+])
+
 logger = logging.getLogger(__name__)
 best_acc = 0
 
@@ -568,7 +580,28 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             Lu = (F.cross_entropy(logits_u_s, targets_u, reduction='none') * mask).mean()
 
             # Compute MoCo loss
-            im_q, im_k = inputs_u_w, inputs_u_s  # strong and weak
+            # Generate two different weakly augmented versions of inputs_u_w
+            im_q_list = []
+            im_k_list = []
+            for img_tensor in inputs_u_w:
+                # Convert tensor to PIL Image
+                img = transforms.ToPILImage()(img_tensor.cpu())
+                # Apply weak augmentation to create im_q and im_k
+                im_q = weak_augmentation(img)
+                im_k = weak_augmentation(img)
+                # Convert back to tensor
+                im_q_tensor = transforms.ToTensor()(im_q)
+                im_k_tensor = transforms.ToTensor()(im_k)
+                im_q_list.append(im_q_tensor)
+                im_k_list.append(im_k_tensor)
+            # Stack tensors and move to device
+            im_q = torch.stack(im_q_list).to(args.device)
+            im_k = torch.stack(im_k_list).to(args.device)
+            # Normalize
+            im_q = transforms.Normalize(mean=cifar10_mean, std=cifar10_std)(im_q)
+            im_k = transforms.Normalize(mean=cifar10_mean, std=cifar10_std)(im_k)
+
+            # Compute MoCo loss
             logits_moco, labels_moco = moco(im_q, im_k, epoch, total_epochs=args.epochs)
 
             if logits_moco is not None and labels_moco is not None and logits_moco.numel() > 0:
