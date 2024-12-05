@@ -49,7 +49,7 @@ def main():
         '--threshold', str(args.threshold),
         '--device', args.device,
         '--out', args.out,
-        '--moco_mask_threshold', args.moco_mask_threshold
+        '--moco_mask_threshold', str(args.moco_mask_threshold)
         
     ]
 
