@@ -569,7 +569,7 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
             # Compute MoCo loss
             im_q, im_k = inputs_u_w, inputs_u_s  # strong and weak
-            logits_moco, labels_moco = moco(im_q, im_k)
+            logits_moco, labels_moco = moco(im_q, im_k, epoch, total_epochs=args.epochs)
 
             if logits_moco is not None and labels_moco is not None and logits_moco.numel() > 0:
                 loss_moco = F.cross_entropy(logits_moco, labels_moco)

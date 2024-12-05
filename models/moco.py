@@ -10,7 +10,8 @@ class MoCo(nn.Module):
         self.K = K
         self.m = m
         self.T = T
-        self.mask_threshold = mask_threshold
+        self.initial_mask_threshold = 0.1  # Minimum threshold
+        self.max_mask_threshold = mask_threshold  # Set by the class parameter
 
         if encoder_args is None:
             encoder_args = {}
@@ -55,7 +56,7 @@ class MoCo(nn.Module):
         ptr = (ptr + batch_size) % self.K  # move pointer
         self.queue_ptr[0] = ptr
 
-    def forward(self, im_q, im_k):
+    def forward(self, im_q, im_k, epoch=None, total_epochs=None):
         q_features = self.encoder_q.features(im_q)
         q = self.fc_q(q_features)
         q = nn.functional.normalize(q, dim=1)
@@ -65,7 +66,11 @@ class MoCo(nn.Module):
             k_features = self.encoder_k.features(im_k)
             k = self.fc_k(k_features) 
             k = nn.functional.normalize(k, dim=1)
-
+    # Adjust mask_threshold dynamically
+        if epoch is not None and total_epochs is not None:
+            self.mask_threshold = self.initial_mask_threshold + (
+                (self.max_mask_threshold - self.initial_mask_threshold) * (epoch / total_epochs)
+            )
         # Compute cosine similarity between q and k
         cos_sim = torch.einsum('nc,nc->n', [q, k])  # Shape: [N]
         # print(f"Cosine similarities: {cos_sim}")
