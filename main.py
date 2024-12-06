@@ -64,7 +64,7 @@ def main():
         '--moco-momentum', str(args.moco_momentum),
         '--moco-temperature', str(args.moco_temperature),
         '--mask-threshold-initial', str(args.mask_threshold_initial),
-        '--mask-threshold-max', str(args.mask_threshold),
+        '--mask-threshold-max', str(args.mask_threshold_max),
         '--q-aug-type', args.q_aug_type,
         '--k-aug-type', args.k_aug_type
     ]
