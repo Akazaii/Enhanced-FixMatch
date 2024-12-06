@@ -52,7 +52,7 @@ def main():
         '--device', args.device,
         '--out', args.out,
         '--moco_mask_threshold', str(args.moco_mask_threshold),
-        --'resume',str(args.resume)
+        '--resume',str(args.resume)
     ]
 
     from scripts.train_original import main as train_main
