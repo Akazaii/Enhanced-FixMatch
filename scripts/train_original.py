@@ -146,6 +146,9 @@ def main(args=None):
     parser.add_argument('--moco-temperature', type=float, default=0.07, help='Temperature for contrastive loss')
     parser.add_argument('--mask-threshold-initial', type=float, default=0.1, help='Initial mask threshold for dynamic masking')
     parser.add_argument('--mask-threshold-max', type=float, default=0.7, help='Max mask threshold for dynamic masking')
+    parser.add_argument('--q-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for query (im_q)')
+    parser.add_argument('--k-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for key (im_k)')
+    
     if args is None:
         args = parser.parse_args()
     else:
