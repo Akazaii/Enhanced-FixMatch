@@ -39,7 +39,8 @@ def main():
     parser.add_argument('--mask-threshold-max', type=float, default=0.7, help='Max mask threshold for dynamic masking')
     parser.add_argument('--q-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for query (im_q)')
     parser.add_argument('--k-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for key (im_k)')
-
+    parser.add_argument('--eval-step', default=1024, type=int,
+                        help='number of eval steps to run')
     args = parser.parse_args()
 
     # Set the random seed
@@ -56,6 +57,7 @@ def main():
         '--epochs', str(args.epochs),
         '--lr', str(args.lr),
         '--threshold', str(args.threshold),
+        '--eval-step', str(args.eval_step),
         '--device', args.device,
         '--out', args.out,
         '--resume',str(args.resume),
