@@ -31,8 +31,7 @@ def main():
     parser.add_argument('--device', type=str, required=True, help='Device to use')
     parser.add_argument('--out', type=str, required=True, help='Output directory')
     parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')
-    parser.add_argument('--resume', default='', type=str,
-                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--resume', default='', type=str, help='path to latest checkpoint (default: none)')
     args = parser.parse_args()
 
     # Set the random seed
