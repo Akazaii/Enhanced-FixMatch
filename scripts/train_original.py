@@ -630,7 +630,7 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 loss_moco = torch.tensor(0.0).to(args.device)
 
             # Total loss
-            loss = Lx + args.lambda_u * Lu + args.alpha * loss_moco
+            loss = Lx + args.lambda_u * Lu + args.moco_alpha * loss_moco
 
             # Backward pass and optimization
             if args.amp:
