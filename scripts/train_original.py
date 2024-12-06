@@ -607,9 +607,6 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 im_q_aug = q_augmentation(img)
                 im_k_aug = k_augmentation(img)
                 # Convert back to tensor
-                im_q_tensor = transforms.ToTensor()(im_q)
-                im_k_tensor = transforms.ToTensor()(im_k)
-                
                 im_q_tensor = transforms.ToTensor()(im_q_aug)
                 im_k_tensor = transforms.ToTensor()(im_k_aug)
                 
