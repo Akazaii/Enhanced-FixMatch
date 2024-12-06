@@ -148,7 +148,7 @@ def main(args=None):
     parser.add_argument('--mask-threshold-max', type=float, default=0.7, help='Max mask threshold for dynamic masking')
     parser.add_argument('--q-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for query (im_q)')
     parser.add_argument('--k-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for key (im_k)')
-    
+
     if args is None:
         args = parser.parse_args()
     else:
@@ -274,7 +274,8 @@ def main(args=None):
             K=65536,
             m=0.999,
             T=0.07,
-            mask_threshold= args.mask_threshold_max,
+            mask_threshold_initial=args.mask_threshold_initial,
+            mask_threshold_max= args.mask_threshold_max,
             encoder_args={
                 'depth': args.model_depth,
                 'widen_factor': args.model_width,
