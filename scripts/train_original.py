@@ -140,7 +140,6 @@ def main(args=None):
                         help="don't use progress bar")
     parser.add_argument('--epochs', type=int, default=None, help='Number of epochs')  # Modify this line
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
-    parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')  # Add this line
     parser.add_argument('--moco-alpha', type=float, default=0.5, help='Weight for MoCo loss in the total loss')
     parser.add_argument('--moco-k-size', type=int, default=65536, help='Queue size for negative keys in MoCo')
     parser.add_argument('--moco-momentum', type=float, default=0.999, help='Momentum for updating key encoder')
@@ -272,7 +271,7 @@ def main(args=None):
             K=65536,
             m=0.999,
             T=0.07,
-            mask_threshold= args.moco_mask_threshold,
+            mask_threshold= args.mask_threshold_max,
             encoder_args={
                 'depth': args.model_depth,
                 'widen_factor': args.model_width,

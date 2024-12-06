@@ -30,7 +30,6 @@ def main():
     parser.add_argument('--threshold', type=float, required=True, help='Pseudo label threshold')
     parser.add_argument('--device', type=str, required=True, help='Device to use')
     parser.add_argument('--out', type=str, required=True, help='Output directory')
-    parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')
     parser.add_argument('--resume', default='', type=str, help='path to latest checkpoint (default: none)')
     parser.add_argument('--moco-alpha', type=float, default=0.5, help='Weight for MoCo loss in the total loss')
     parser.add_argument('--moco-k-size', type=int, default=65536, help='Queue size for negative keys in MoCo')
@@ -59,7 +58,6 @@ def main():
         '--threshold', str(args.threshold),
         '--device', args.device,
         '--out', args.out,
-        '--moco_mask_threshold', str(args.moco_mask_threshold),
         '--resume',str(args.resume),
         '--moco-alpha', str(args.moco_alpha),
         '--moco-k-size', str(args.moco_k_size),
