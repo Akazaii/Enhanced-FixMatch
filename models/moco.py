@@ -4,14 +4,14 @@ import torch.nn.functional as F
 from models.wideresnet import WideResNet
 
 class MoCo(nn.Module):
-    def __init__(self, base_encoder, num_classes, dim=128, K=65536, m=0.999, T=0.07, mask_threshold=0.7, encoder_args=None):
+    def __init__(self, base_encoder, num_classes, dim=128, K=65536, m=0.999, T=0.07, alpha=0.5, mask_threshold_initial=0.1, mask_threshold_max=0.7, encoder_args=None):
         super(MoCo, self).__init__()
 
         self.K = K
         self.m = m
         self.T = T
-        self.initial_mask_threshold = 0.1  # Minimum threshold
-        self.max_mask_threshold = mask_threshold  # Set by the class parameter
+        self.initial_mask_threshold = mask_threshold_initial
+        self.max_mask_threshold = mask_threshold_max
 
         if encoder_args is None:
             encoder_args = {}

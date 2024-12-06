@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
+from dataset.randaugment import RandAugmentMC  # Ensure this is accessible
 from dataset.cifar import DATASET_GETTERS
 from utils import AverageMeter, accuracy 
 
@@ -141,14 +141,19 @@ def main(args=None):
     parser.add_argument('--epochs', type=int, default=None, help='Number of epochs')  # Modify this line
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')  # Add this line
     parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')  # Add this line
-
+    parser.add_argument('--moco-alpha', type=float, default=0.5, help='Weight for MoCo loss in the total loss')
+    parser.add_argument('--moco-k-size', type=int, default=65536, help='Queue size for negative keys in MoCo')
+    parser.add_argument('--moco-momentum', type=float, default=0.999, help='Momentum for updating key encoder')
+    parser.add_argument('--moco-temperature', type=float, default=0.07, help='Temperature for contrastive loss')
+    parser.add_argument('--mask-threshold-initial', type=float, default=0.1, help='Initial mask threshold for dynamic masking')
+    parser.add_argument('--mask-threshold-max', type=float, default=0.7, help='Max mask threshold for dynamic masking')
     if args is None:
         args = parser.parse_args()
     else:
         args = parser.parse_args(args)
 
     global best_acc
-
+    
     def create_model(args):
         if args.arch == 'wideresnet':
             import models.wideresnet as models
@@ -521,6 +526,15 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
     model.train()
     moco.train()  # Set MoCo to training mode
+    if args.q_aug_type == 'strong':
+        q_augmentation = RandAugmentMC(n=2, m=10)
+    else:
+        q_augmentation = weak_augmentation
+
+    if args.k_aug_type == 'strong':
+        k_augmentation = RandAugmentMC(n=2, m=10)
+    else:
+        k_augmentation = weak_augmentation
     for epoch in range(args.start_epoch, args.epochs):
         batch_time = AverageMeter()
         data_time = AverageMeter()
@@ -587,11 +601,15 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 # Convert tensor to PIL Image
                 img = transforms.ToPILImage()(img_tensor.cpu())
                 # Apply weak augmentation to create im_q and im_k
-                im_q = weak_augmentation(img)
-                im_k = weak_augmentation(img)
+                im_q_aug = q_augmentation(img)
+                im_k_aug = k_augmentation(img)
                 # Convert back to tensor
                 im_q_tensor = transforms.ToTensor()(im_q)
                 im_k_tensor = transforms.ToTensor()(im_k)
+                
+                im_q_tensor = transforms.ToTensor()(im_q_aug)
+                im_k_tensor = transforms.ToTensor()(im_k_aug)
+                
                 im_q_list.append(im_q_tensor)
                 im_k_list.append(im_k_tensor)
             # Stack tensors and move to device
@@ -612,8 +630,7 @@ def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 loss_moco = torch.tensor(0.0).to(args.device)
 
             # Total loss
-            alpha = 0.5
-            loss = Lx + args.lambda_u * Lu + alpha * loss_moco
+            loss = Lx + args.lambda_u * Lu + args.alpha * loss_moco
 
             # Backward pass and optimization
             if args.amp:

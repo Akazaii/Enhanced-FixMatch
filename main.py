@@ -32,6 +32,15 @@ def main():
     parser.add_argument('--out', type=str, required=True, help='Output directory')
     parser.add_argument('--moco_mask_threshold', type=float, default=0.7, help='Moco Mask')
     parser.add_argument('--resume', default='', type=str, help='path to latest checkpoint (default: none)')
+    parser.add_argument('--moco-alpha', type=float, default=0.5, help='Weight for MoCo loss in the total loss')
+    parser.add_argument('--moco-k-size', type=int, default=65536, help='Queue size for negative keys in MoCo')
+    parser.add_argument('--moco-momentum', type=float, default=0.999, help='Momentum for updating key encoder')
+    parser.add_argument('--moco-temperature', type=float, default=0.07, help='Temperature for contrastive loss')
+    parser.add_argument('--mask-threshold-initial', type=float, default=0.1, help='Initial mask threshold for dynamic masking')
+    parser.add_argument('--mask-threshold-max', type=float, default=0.7, help='Max mask threshold for dynamic masking')
+    parser.add_argument('--q-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for query (im_q)')
+    parser.add_argument('--k-aug-type', type=str, default='weak', choices=['weak', 'strong'], help='Augmentation type for key (im_k)')
+
     args = parser.parse_args()
 
     # Set the random seed
@@ -51,7 +60,15 @@ def main():
         '--device', args.device,
         '--out', args.out,
         '--moco_mask_threshold', str(args.moco_mask_threshold),
-        '--resume',str(args.resume)
+        '--resume',str(args.resume),
+        '--moco-alpha', str(args.moco_alpha),
+        '--moco-k-size', str(args.moco_k_size),
+        '--moco-momentum', str(args.moco_momentum),
+        '--moco-temperature', str(args.moco_temperature),
+        '--mask-threshold-initial', str(args.mask_threshold_initial),
+        '--mask-threshold-max', str(args.mask_threshold),
+        '--q-aug-type', args.q_aug_type,
+        '--k-aug-type', args.k_aug_type
     ]
 
     from scripts.train_original import main as train_main
