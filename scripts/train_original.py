@@ -18,6 +18,7 @@ from tqdm import tqdm
 from dataset.randaugment import RandAugmentMC  # Ensure this is accessible
 from dataset.cifar import DATASET_GETTERS
 from utils import AverageMeter, accuracy 
+import csv
 
 from torchvision import transforms
 from PIL import Image
@@ -508,6 +509,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 np.mean(test_accs[-20:])))
 
     if args.local_rank in [-1, 0]:
+        
         args.writer.close()
 
 def train_moco(args, labeled_trainloader, unlabeled_trainloader, test_loader,
@@ -759,6 +761,18 @@ def test(args, test_loader, model, epoch):
 
     logger.info("top-1 acc: {:.2f}".format(top1.avg))
     logger.info("top-5 acc: {:.2f}".format(top5.avg))
+
+    # ----- ADD THIS SNIPPET -----
+    if args.local_rank in [-1, 0]:
+        csv_path = os.path.join(args.out, "test_metrics.csv")  # or any filename you'd like
+        file_exists = os.path.isfile(csv_path)
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["epoch", "test_loss", "top1_acc", "top5_acc"])
+            # losses.avg and top5.avg are already computed above
+            writer.writerow([epoch, losses.avg, top1.avg, top5.avg])
+    # ----- END OF SNIPPET -----
     return losses.avg, top1.avg
 
 
